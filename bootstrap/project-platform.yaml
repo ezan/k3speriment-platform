@@ -9,7 +9,6 @@ spec:
   description: Platform-layer tooling for the k3speriment cluster.
   sourceRepos:
     - https://github.com/ezan/k3speriment-platform.git
-    - https://charts.jetstack.io
     - https://charts.external-secrets.io
     - https://stakater.github.io/stakater-charts
     - https://prometheus-community.github.io/helm-charts

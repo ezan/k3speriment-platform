@@ -22,8 +22,19 @@ spec:
         alertmanager:
           enabled: false
 
+        defaultRules:
+          create: true
+          rules:
+            alertmanager: false
+            etcd: false
+            kubeControllerManager: false
+            kubeProxy: false
+            kubeSchedulerAlerting: false
+            kubeSchedulerRecording: false
+
         grafana:
           enabled: true
+          defaultDashboardsEnabled: true
           defaultDashboardsTimezone: browser
           adminPassword: changeme
           persistence:
@@ -39,8 +50,27 @@ spec:
           sidecar:
             dashboards:
               enabled: true
+              searchNamespace: ALL
+              label: grafana_dashboard
+              labelValue: "1"
             datasources:
               enabled: true
+          additionalDataSources:
+            - name: Loki
+              type: loki
+              access: proxy
+              url: http://loki.monitoring.svc.cluster.local:3100
+              jsonData:
+                maxLines: 1000
+          ingress:
+            enabled: true
+            ingressClassName: traefik
+            annotations:
+              traefik.ingress.kubernetes.io/router.entrypoints: websecure
+              traefik.ingress.kubernetes.io/router.tls: "true"
+            hosts:
+              - grafana.k3s.local
+            path: /
 
         prometheus:
           prometheusSpec:
@@ -63,6 +93,35 @@ spec:
             serviceMonitorSelectorNilUsesHelmValues: false
             podMonitorSelectorNilUsesHelmValues: false
             ruleSelectorNilUsesHelmValues: false
+
+        additionalPrometheusRulesMap:
+          homelab-health:
+            groups:
+              - name: homelab.nodes
+                rules:
+                  - alert: NodeDiskPressure
+                    expr: kube_node_status_condition{condition="DiskPressure",status="true"} == 1
+                    for: 5m
+                    labels:
+                      severity: warning
+                    annotations:
+                      summary: "Node {{ $labels.node }} has DiskPressure."
+                  - alert: NodeMemoryPressure
+                    expr: kube_node_status_condition{condition="MemoryPressure",status="true"} == 1
+                    for: 5m
+                    labels:
+                      severity: warning
+                    annotations:
+                      summary: "Node {{ $labels.node }} has MemoryPressure."
+                  - alert: DataDiskNearlyFull
+                    expr: |
+                      (node_filesystem_avail_bytes{mountpoint="/mnt/data"}
+                       / node_filesystem_size_bytes{mountpoint="/mnt/data"}) < 0.15
+                    for: 10m
+                    labels:
+                      severity: warning
+                    annotations:
+                      summary: "Data disk on {{ $labels.instance }} has <15% free."
 
         prometheusOperator:
           resources:
