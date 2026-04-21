@@ -49,20 +49,22 @@ Find the Traefik LB IP with:
 kubectl -n kube-system get svc traefik -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
 ```
 
-Grafana admin password is `changeme` in values for now — rotate once ESO + `ClusterSecretStore` are wired to Key Vault.
+Grafana admin password is pulled from Azure Key Vault via ESO — see **Bootstrapping** above.
 
 ## Bootstrapping
 
 1. In `k3speriment-infra`, set `argocd.repo_url = "https://github.com/ezan/k3speriment-platform.git"` in `terraform/environments/alpha.tfvars`.
-2. Run the `Deploy Infrastructure` workflow.
+2. Run the `Deploy Infrastructure` workflow. The workflow's `eso_bootstrap` Ansible role:
+   - ensures `grafana-admin-password` exists in Key Vault (generates a random 24-byte one on first deploy),
+   - waits for ESO's `ClusterSecretStore` CRD to be installed by Argo CD,
+   - applies a `ClusterSecretStore` named `azure-key-vault` that authenticates to the KV via the VMs' system-assigned managed identities (IMDS).
 3. Argo CD's root Application points at `bootstrap/`, which brings up the AppProject and the two app-of-apps. Those in turn sync everything under `apps/`.
-4. Grafana initial credentials are created by the kube-prometheus-stack chart; retrieve with:
+4. Grafana admin password is pulled from Key Vault via ESO → K8s Secret `grafana-admin` in namespace `monitoring` → referenced by the chart via `grafana.admin.existingSecret`. Retrieve the current password with:
    ```
-   kubectl -n monitoring get secret kube-prometheus-stack-grafana -o jsonpath='{.data.admin-password}' | base64 -d
+   az keyvault secret show --vault-name <kv-name> --name grafana-admin-password --query value -o tsv
    ```
+   (Rotating the secret in Key Vault will cause ESO to refresh the K8s Secret and Reloader to roll the Grafana pod.)
 
 ## TODO (deferred from MVP)
 
-- `ClusterSecretStore` for ESO pointing at the environment's Azure Key Vault (blocked on picking an auth mode: workload identity vs. VM managed identity via IMDS).
-- Alertmanager + delivery (Slack/email/webhook) — currently rules evaluate but fire nowhere.
-- Promote Grafana admin password out of the repo into Key Vault via ESO once ClusterSecretStore lands.
+(nothing currently deferred — add items here as they come up)

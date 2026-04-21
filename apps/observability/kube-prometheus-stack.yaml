@@ -36,7 +36,14 @@ spec:
           enabled: true
           defaultDashboardsEnabled: true
           defaultDashboardsTimezone: browser
-          adminPassword: changeme
+          admin:
+            existingSecret: grafana-admin
+            userKey: admin-user
+            passwordKey: admin-password
+          # Restart Grafana when the grafana-admin secret changes (ESO rotates from KV).
+          # Reloader watches annotated workloads, not pods, so this goes on the Deployment.
+          annotations:
+            reloader.stakater.com/auto: "true"
           persistence:
             enabled: true
             storageClassName: local-path
